@@ -9,6 +9,11 @@ Calculate the stress that is energy-conjugated to `strain`, consistent with the 
 variables. `state` is normally the already-converged state obtained from a previous
 call to `material_response`, e.g. during postprocessing.
 
+!!! warning
+    The tangent obtained by automatic differentiation through this function will not give the
+    consistent tangent, so it cannot be used as a replacement for `material_response` during
+    e.g. equilibrium iterations.
+
 ## Implementing this interface
 A material-model developer only needs to implement the full-dimensional method,
 `calculate_current_stress(m::MyMaterial, strain, state::MyMaterialState)`. If `MyMaterial`

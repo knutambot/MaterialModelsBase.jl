@@ -34,12 +34,3 @@ The wrapper `ReducedStressState` is provided for that purpose.
 ```@docs
 ReducedStressState
 ```
-
-## Postprocessing
-When postprocessing an already converged simulation, it is often useful to calculate
-the stress at a strain that is close to, but not exactly, the one used to produce a
-given state (e.g. an interpolated value), without advancing any history variables.
-`calculate_current_stress` provides this, and supports `ReducedStressState` as well.
-```@docs
-calculate_current_stress
-```
