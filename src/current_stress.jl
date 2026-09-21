@@ -10,9 +10,11 @@ variables. `state` is normally the already-converged state obtained from a previ
 call to `material_response`, e.g. during postprocessing.
 
 !!! warning
-    The tangent obtained by automatic differentiation through this function will not give the
-    consistent tangent, so it cannot be used as a replacement for `material_response` during
-    e.g. equilibrium iterations.
+    Differentiating this function wrt. `strain` while holding `state` fixed gives a
+    frozen-state tangent, which generally differs from `material_response`'s consistent
+    tangent whenever internal/history variables would evolve with `strain` (e.g. for a
+    plastic or viscous material). It is therefore not a general replacement for
+    `material_response` during, e.g., equilibrium iterations.
 
 ## Implementing this interface
 A material-model developer only needs to implement the full-dimensional method,

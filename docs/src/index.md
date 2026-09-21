@@ -104,7 +104,7 @@ given as
 AbstractExtraOutput
 ```
 
-## Postprocessing
+### Postprocessing
 When postprocessing an already converged simulation, it is often useful to calculate
 the stress again without advancing any history variables.
 `calculate_current_stress` provides this and supports lower-dimensional stress states as well. 
