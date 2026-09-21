@@ -23,7 +23,7 @@ export GeneralStressState                                   # General iterative 
 export update_stress_state!                                 # For nonzero stress-conditions
 
 # Postprocessing
-export calculate_current_stress                             # Stress consistent with a frozen state
+export stress_from_state                                    # Stress consistent with a frozen state
 
 # For parameter identification and differentiation of materials
 export tovector, tovector!, fromvector                      # Convert to/from `AbstractVector`s
@@ -161,7 +161,7 @@ struct NoExtraOutput <: AbstractExtraOutput end
 
 include("vector_conversion.jl")
 include("stressiterations.jl")
-include("current_stress.jl")
+include("stress_from_state.jl")
 include("differentiation.jl")
 include("ErrorExceptions.jl")
 

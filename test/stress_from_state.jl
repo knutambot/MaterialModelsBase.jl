@@ -19,7 +19,7 @@ end
 
 # Stateless (NoMaterialState) toy material: exercises the fully generic
 # NoMaterialState fallbacks without any material-specific
-# `calculate_current_stress` method at all.
+# `stress_from_state` method at all.
 struct ToyElastic{T} <: AbstractMaterial
     C::SymmetricTensor{4,3,T}
 end
@@ -31,7 +31,7 @@ end
 # Same as `ToyElastic`, but with a specialized `PlaneStress` method that omits the
 # optional 4th (full-strain) output, as explicitly permitted by the
 # `material_response(::AbstractStressState, ...)` interface. Regression test for a
-# `calculate_current_stress` fast path that would otherwise assume 4 outputs.
+# `stress_from_state` fast path that would otherwise assume 4 outputs.
 struct ToyElasticSpecialized{T} <: AbstractMaterial
     C::SymmetricTensor{4,3,T}
 end
@@ -61,7 +61,7 @@ function MMB.material_response(m::ToyHistory, ϵ::SymmetricTensor{2,3}, state::T
     dσdϵ = (1 - m.H) * m.C # Consistent tangent: ϵp_new depends linearly on ϵ
     return σ, dσdϵ, ToyHistoryState(ϵp_new)
 end
-MMB.calculate_current_stress(m::ToyHistory, ϵ::SymmetricTensor{2,3}, state::ToyHistoryState) = m.C ⊡ (ϵ - state.ϵp)
+MMB.stress_from_state(m::ToyHistory, ϵ::SymmetricTensor{2,3}, state::ToyHistoryState) = m.C ⊡ (ϵ - state.ϵp)
 
 # Finite-strain (nonsymmetric `Tensor{2,3}`) analogue, to check that
 # `FrozenStressMaterial`'s autodiff also works for the `Tensor` tensor family.
@@ -79,7 +79,7 @@ function MMB.material_response(m::ToyHistoryFinite, F::Tensor{2,3}, state::ToyHi
     dPdF = (1 - m.H) * m.C # Consistent tangent: Fp_new depends linearly on F
     return P, dPdF, ToyHistoryFiniteState(Fp_new)
 end
-MMB.calculate_current_stress(m::ToyHistoryFinite, F::Tensor{2,3}, state::ToyHistoryFiniteState) = m.C ⊡ (F - state.Fp)
+MMB.stress_from_state(m::ToyHistoryFinite, F::Tensor{2,3}, state::ToyHistoryFiniteState) = m.C ⊡ (F - state.Fp)
 
 # A plain, stateless material equivalent to `ToyHistory` frozen at a given `ϵp`, used
 # as an independent reference to check the generic reduced-dimensional fallback
@@ -98,20 +98,20 @@ end # module
 
 import .CurrentStressTestMaterials as CT
 
-@testset "calculate_current_stress" begin
+@testset "stress_from_state" begin
     @testset "NoMaterialState generic fallback" begin
         C = CT.isotropic_C(80.e3, 160.e3)
         m = CT.ToyElastic(C)
         state = initial_material_state(m)
         @test state isa MaterialModelsBase.NoMaterialState
         ϵ = rand(SymmetricTensor{2,3})
-        @test calculate_current_stress(m, ϵ, state) ≈ C ⊡ ϵ
+        @test stress_from_state(m, ϵ, state) ≈ C ⊡ ϵ
 
         # Reduced-dimensional fast path (no material-specific method exists at all)
         rss = ReducedStressState(PlaneStress(), m)
         ϵ_red = rand(SymmetricTensor{2,2})
         state_red = initial_material_state(rss)
-        σ_direct = calculate_current_stress(rss, ϵ_red, state_red)
+        σ_direct = stress_from_state(rss, ϵ_red, state_red)
         σ_mr, _, _, _ = material_response(rss, ϵ_red, state_red)
         @test σ_direct ≈ σ_mr
 
@@ -119,7 +119,7 @@ import .CurrentStressTestMaterials as CT
         # method is allowed to omit the optional 4th (full-strain) output.
         m_spec = CT.ToyElasticSpecialized(C)
         state_spec = initial_material_state(m_spec)
-        σ_spec_direct = calculate_current_stress(PlaneStress(), m_spec, ϵ_red, state_spec)
+        σ_spec_direct = stress_from_state(PlaneStress(), m_spec, ϵ_red, state_spec)
         σ_spec_mr, _, _ = material_response(PlaneStress(), m_spec, ϵ_red, state_spec)
         @test σ_spec_direct ≈ σ_spec_mr
     end
@@ -131,12 +131,12 @@ import .CurrentStressTestMaterials as CT
         state0 = initial_material_state(m)
         ϵ1 = rand(SymmetricTensor{2,3})
         σ1, _, state1 = material_response(m, ϵ1, state0)
-        @test calculate_current_stress(m, ϵ1, state1) ≈ σ1
+        @test stress_from_state(m, ϵ1, state1) ≈ σ1
 
         # Frozen-state postprocessing: a different strain should give the frozen-ϵp
         # response, NOT a fresh history update.
         ϵ2 = ϵ1 + rand(SymmetricTensor{2,3}) / 10
-        σ2_frozen = calculate_current_stress(m, ϵ2, state1)
+        σ2_frozen = stress_from_state(m, ϵ2, state1)
         @test σ2_frozen ≈ C ⊡ (ϵ2 - state1.ϵp)
         σ2_true, _, state2_true = material_response(m, ϵ2, state1)
         @test !(σ2_true ≈ σ2_frozen)
@@ -151,15 +151,15 @@ import .CurrentStressTestMaterials as CT
         state0 = initial_material_state(rss)
         ϵ1 = rand(SymmetricTensor{2,2}) / 10
         σ1, _, state1, _ = material_response(rss, ϵ1, state0)
-        @test calculate_current_stress(rss, ϵ1, state1) ≈ σ1
+        @test stress_from_state(rss, ϵ1, state1) ≈ σ1
 
         ϵ2 = ϵ1 + rand(SymmetricTensor{2,2}) / 10
-        σ2_frozen = calculate_current_stress(rss, ϵ2, state1)
+        σ2_frozen = stress_from_state(rss, ϵ2, state1)
 
         # Independent reference: the frozen material is exactly linear elastic in
         # (ϵ - state1.ϵp), so its plane-stress response can be obtained directly
         # from MMB's own (already-tested) stress-state iteration on an explicit,
-        # equivalent material, bypassing `calculate_current_stress` entirely.
+        # equivalent material, bypassing `stress_from_state` entirely.
         flin = CT.FrozenLinear(C, state1.ϵp)
         σ2_expected, _, _, _ = material_response(PlaneStress(), flin, ϵ2, initial_material_state(flin))
         @test σ2_frozen ≈ σ2_expected
@@ -177,10 +177,10 @@ import .CurrentStressTestMaterials as CT
         state0 = initial_material_state(rss)
         F1 = one(Tensor{2,2}) + rand(Tensor{2,2}) / 20
         P1, _, state1, _ = material_response(rss, F1, state0)
-        @test calculate_current_stress(rss, F1, state1) ≈ P1
+        @test stress_from_state(rss, F1, state1) ≈ P1
 
         F2 = F1 + rand(Tensor{2,2}) / 20
-        P2_frozen = calculate_current_stress(rss, F2, state1)
+        P2_frozen = stress_from_state(rss, F2, state1)
         P2_true, _, state2_true, _ = material_response(rss, F2, state1)
         @test !(P2_true ≈ P2_frozen)
         @test state2_true.Fp != state1.Fp
