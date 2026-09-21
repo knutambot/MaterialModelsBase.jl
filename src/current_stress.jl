@@ -30,10 +30,10 @@ function calculate_current_stress(m::AbstractMaterial, strain, state::NoMaterial
     return σ
 end
 
-# Wraps a frozen-state stress formula, `f`, mapping a strain (`SecondOrderTensor{3}`,
-# i.e. `Tensor{2,3}` or `SymmetricTensor{2,3}`) to a stress (at fixed history/internal
-# variables) as an `AbstractMaterial`, so that it can ride the existing stress-state
-# Newton iteration (e.g. for `PlaneStress`). The tangent needed for that iteration is
+# Wraps a material `m` and a frozen state `s` as an `AbstractMaterial`, whose
+# `material_response` evaluates `calculate_current_stress(m, strain, s)` (at fixed
+# history/internal variables) so that it can ride the existing stress-state Newton
+# iteration (e.g. for `PlaneStress`). The tangent needed for that iteration is
 # obtained via automatic differentiation. This powers the generic reduced-dimensional
 # fallback of `calculate_current_stress` below.
 struct FrozenStressMaterial{MT <: AbstractMaterial, ST <: AbstractMaterialState} <: AbstractMaterial
