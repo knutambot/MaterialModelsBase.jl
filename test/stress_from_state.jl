@@ -17,9 +17,9 @@ function isotropic_C_finite(G, K)
     return 2G * otimesu(I2, I2) + K * otimes(I2, I2)
 end
 
-# Stateless (NoMaterialState) toy material: exercises the fully generic
-# NoMaterialState fallbacks without any material-specific
-# `stress_from_state` method at all.
+# Stateless (NoMaterialState) toy material: exercises the generic
+# reduced-dimensional fallback (via `FrozenStressMaterial` and autodiff), given
+# only a full-dimensional `stress_from_state` method.
 struct ToyElastic{T} <: AbstractMaterial
     C::SymmetricTensor{4,3,T}
 end
@@ -27,22 +27,7 @@ MMB.initial_material_state(m::ToyElastic{T}) where {T} = MMB.NoMaterialState{T}(
 function MMB.material_response(m::ToyElastic, ϵ::SymmetricTensor{2,3}, state, args...)
     return m.C ⊡ ϵ, m.C, state
 end
-
-# Same as `ToyElastic`, but with a specialized `PlaneStress` method that omits the
-# optional 4th (full-strain) output, as explicitly permitted by the
-# `material_response(::AbstractStressState, ...)` interface. Regression test for a
-# `stress_from_state` fast path that would otherwise assume 4 outputs.
-struct ToyElasticSpecialized{T} <: AbstractMaterial
-    C::SymmetricTensor{4,3,T}
-end
-MMB.initial_material_state(m::ToyElasticSpecialized{T}) where {T} = MMB.NoMaterialState{T}()
-function MMB.material_response(m::ToyElasticSpecialized, ϵ::SymmetricTensor{2,3}, state, args...)
-    return m.C ⊡ ϵ, m.C, state
-end
-function MMB.material_response(::PlaneStress, m::ToyElasticSpecialized, ϵ::SymmetricTensor{2,2}, state, args...)
-    C_red = SymmetricTensor{4,2}((i, j, k, l) -> m.C[i, j, k, l])
-    return C_red ⊡ ϵ, C_red, state
-end
+MMB.stress_from_state(m::ToyElastic, ϵ::SymmetricTensor{2,3}, state) = m.C ⊡ ϵ
 
 # Small-strain toy material with a state that unconditionally "evolves" every call
 # (unlike real plasticity with a yield surface), so that a frozen-state evaluation
@@ -99,7 +84,7 @@ end # module
 import .CurrentStressTestMaterials as CT
 
 @testset "stress_from_state" begin
-    @testset "NoMaterialState generic fallback" begin
+    @testset "Stateless material, generic reduced-dimensional fallback" begin
         C = CT.isotropic_C(80.e3, 160.e3)
         m = CT.ToyElastic(C)
         state = initial_material_state(m)
@@ -107,21 +92,14 @@ import .CurrentStressTestMaterials as CT
         ϵ = rand(SymmetricTensor{2,3})
         @test stress_from_state(m, ϵ, state) ≈ C ⊡ ϵ
 
-        # Reduced-dimensional fast path (no material-specific method exists at all)
+        # Reduced-dimensional support follows automatically from the full-dimensional
+        # method above, via `FrozenStressMaterial` and autodiff.
         rss = ReducedStressState(PlaneStress(), m)
         ϵ_red = rand(SymmetricTensor{2,2})
         state_red = initial_material_state(rss)
         σ_direct = stress_from_state(rss, ϵ_red, state_red)
         σ_mr, _, _, _ = material_response(rss, ϵ_red, state_red)
         @test σ_direct ≈ σ_mr
-
-        # Regression test: a specialized `material_response(stress_state, m, ...)`
-        # method is allowed to omit the optional 4th (full-strain) output.
-        m_spec = CT.ToyElasticSpecialized(C)
-        state_spec = initial_material_state(m_spec)
-        σ_spec_direct = stress_from_state(PlaneStress(), m_spec, ϵ_red, state_spec)
-        σ_spec_mr, _, _ = material_response(PlaneStress(), m_spec, ϵ_red, state_spec)
-        @test σ_spec_direct ≈ σ_spec_mr
     end
 
     @testset "Stateful material, full dimension" begin
